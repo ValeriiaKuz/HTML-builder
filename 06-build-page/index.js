@@ -1,30 +1,39 @@
-const { readdir, mkdir, readFile, writeFile } = require('fs/promises');
+const {
+  readdir,
+  mkdir,
+  readFile,
+  writeFile,
+  rm,
+  copyFile,
+} = require('fs/promises');
 const path = require('path');
 const fs = require('fs');
 
-const destinationPath = path.resolve(__dirname, 'project-dist');
+const projectPath = path.resolve(__dirname, 'project-dist');
 const templatePath = path.resolve(__dirname, 'template.html');
 const indexPath = path.resolve(__dirname, 'project-dist', 'index.html');
 const componentsPath = path.resolve(__dirname, 'components');
+const stylesPath = path.resolve(__dirname, 'styles');
+const bundlePath = path.resolve(__dirname, 'project-dist', 'style.css');
+const assetsPath = path.resolve(__dirname, 'assets');
+const copiedAssetsPath = path.resolve(__dirname, 'project-dist', 'assets');
 
-async function makeDirectory(path) {
+async function buildPage() {
   try {
-    return await mkdir(path, {
+    await mkdir(projectPath, {
       recursive: true,
     });
-  } catch (err) {
-    console.log(err.message);
-  }
-}
-async function readAndSaveFile(pathForReading, pathForWriting) {
-  const output = fs.createWriteStream(pathForWriting, { encoding: 'utf-8' });
-  try {
-    const fileValue = await readFile(pathForReading, { encoding: 'utf-8' });
+    const output = fs.createWriteStream(indexPath, { encoding: 'utf-8' });
+    const fileValue = await readFile(templatePath, { encoding: 'utf-8' });
     output.write(fileValue);
+    output.close();
+    const indexWithComponents = await replaceTags();
+    await writeFile(indexPath, indexWithComponents);
+    await mergeStyles(stylesPath, bundlePath);
+    await copyDir(assetsPath, copiedAssetsPath);
   } catch (err) {
     console.log(err.message);
   }
-  output.close();
 }
 
 async function replaceTags() {
@@ -51,8 +60,51 @@ async function replaceTags() {
   }
   return fileValue;
 }
-makeDirectory(destinationPath).then(() => {
-  readAndSaveFile(templatePath, indexPath).then(() => {
-    replaceTags().then(async (file) => await writeFile(indexPath, file));
-  });
-});
+
+async function mergeStyles(stylesPath, bundlePath) {
+  try {
+    const files = await readdir(stylesPath, {
+      withFileTypes: true,
+    });
+    const output = fs.createWriteStream(bundlePath, { encoding: 'utf-8' });
+
+    for (const file of files) {
+      const filePath = path.resolve(__dirname, 'styles', file.name);
+      if (file.isFile() && path.extname(filePath) === '.css') {
+        const fileValue = await readFile(filePath, { encoding: 'utf-8' });
+        output.write(fileValue + '\n');
+      }
+    }
+    output.end();
+  } catch (err) {
+    console.log(err.message);
+  }
+}
+async function copyDir(sourcePath, destinationPath) {
+  try {
+    await rm(destinationPath, { force: true, recursive: true });
+    await mkdir(destinationPath, {
+      recursive: true,
+    });
+    const files = await readdir(sourcePath, {
+      withFileTypes: true,
+    });
+    for (const file of files) {
+      if (file.isFile()) {
+        await copyFile(
+          path.resolve(sourcePath, file.name),
+          path.resolve(destinationPath, file.name),
+        );
+      }
+      if (file.isDirectory()) {
+        copyDir(
+          path.resolve(sourcePath, file.name),
+          path.resolve(destinationPath, file.name),
+        );
+      }
+    }
+  } catch (err) {
+    console.log(err.message);
+  }
+}
+buildPage();
