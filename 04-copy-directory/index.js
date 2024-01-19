@@ -4,24 +4,12 @@ const path = require('path');
 const sourcePath = path.resolve(__dirname, 'files');
 const destinationPath = path.resolve(__dirname, 'files-copy');
 
-async function makeDirectory() {
+async function copyDir(sourcePath, destinationPath) {
   try {
-    return await mkdir(destinationPath, {
+    await rm(destinationPath, { force: true, recursive: true });
+    await mkdir(destinationPath, {
       recursive: true,
     });
-  } catch (err) {
-    console.error(err.message);
-  }
-}
-async function removeFilesFromDir() {
-  try {
-    return await rm(destinationPath, { force: true, recursive: true });
-  } catch (err) {
-    console.error(err.message);
-  }
-}
-async function copyFiles() {
-  try {
     const files = await readdir(sourcePath, {
       withFileTypes: true,
     });
@@ -34,11 +22,7 @@ async function copyFiles() {
       }
     }
   } catch (err) {
-    console.error(err.message);
+    console.log(err.message);
   }
 }
-removeFilesFromDir().then(() => {
-  makeDirectory().then(() => {
-    copyFiles().catch((err) => console.log(err.message));
-  });
-});
+copyDir(sourcePath, destinationPath);
